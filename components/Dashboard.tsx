@@ -14,7 +14,7 @@ import { MarketOverview } from "./MarketOverview";
 import { NewsCard } from "./NewsCard";
 import { StockCard } from "./StockCard";
 import { ThemeToggle } from "./ThemeToggle";
-import { classNames, formatDateTimeJa } from "@/lib/utils";
+import { classNames, formatDateTimeJa, todayJaLabel } from "@/lib/utils";
 
 interface SummaryResponse {
   summary: DailySummaryType;
@@ -95,7 +95,7 @@ export function Dashboard() {
         <div>
           <h1 className="text-xl font-bold sm:text-2xl">Stock Finder</h1>
           <p className="text-xs text-slate-500 dark:text-slate-400">
-            米国株モニター — 日本語表示
+            {todayJaLabel()} (JST) — 米国株モニター
           </p>
         </div>
         <div className="flex items-center gap-2">

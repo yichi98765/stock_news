@@ -6,6 +6,7 @@ import type {
   StockQuote
 } from "../types";
 import { buildMarketHeadline, buildPerTickerSummary, buildRuleBasedSummary } from "./ruleBased";
+import { callGeminiWithFallback } from "./geminiClient";
 
 interface SummaryInput {
   quotes: StockQuote[];
@@ -104,51 +105,18 @@ function parseModelJson(text: string): ModelOutput | null {
 }
 
 async function callGemini(prompt: string): Promise<string | null> {
-  const apiKey = process.env.GEMINI_API_KEY;
-  if (!apiKey) return null;
-  const model = process.env.GEMINI_MODEL || "gemini-2.5-flash-lite";
-
-  try {
-    const url = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(
-      model
-    )}:generateContent?key=${apiKey}`;
-    const res = await fetch(url, {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({
-        system_instruction: { parts: [{ text: SYSTEM_PROMPT }] },
-        contents: [{ role: "user", parts: [{ text: prompt }] }],
-        generationConfig: {
-          temperature: 0.2,
-          responseMimeType: "application/json"
-        }
-      })
-    });
-    if (!res.ok) {
-      const body = await res.text().catch(() => "");
-      console.warn(
-        `[summarizer] gemini status=${res.status} body=${body.slice(0, 300)}`
-      );
-      return null;
-    }
-    const data = (await res.json()) as {
-      candidates?: { content?: { parts?: { text?: string }[] } }[];
-      promptFeedback?: { blockReason?: string };
-    };
-    if (data.promptFeedback?.blockReason) {
-      console.warn(
-        `[summarizer] gemini blocked: ${data.promptFeedback.blockReason}`
-      );
-      return null;
-    }
-    const text =
-      data.candidates?.[0]?.content?.parts?.map((p) => p.text ?? "").join("") ?? "";
-    if (!text) console.warn("[summarizer] gemini empty text");
-    return text || null;
-  } catch (e) {
-    console.warn(`[summarizer] gemini threw: ${(e as Error).message}`);
-    return null;
-  }
+  const result = await callGeminiWithFallback(
+    {
+      system_instruction: { parts: [{ text: SYSTEM_PROMPT }] },
+      contents: [{ role: "user", parts: [{ text: prompt }] }],
+      generationConfig: {
+        temperature: 0.2,
+        responseMimeType: "application/json"
+      }
+    },
+    { tag: "summarizer" }
+  );
+  return result?.text ?? null;
 }
 
 async function callAnthropic(prompt: string): Promise<string | null> {

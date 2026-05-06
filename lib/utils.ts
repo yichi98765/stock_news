@@ -29,6 +29,16 @@ export function trendOf(percent: number | null): Sentiment {
   return "neutral";
 }
 
+export function todayJaLabel(): string {
+  return new Date().toLocaleDateString("ja-JP", {
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    weekday: "short",
+    timeZone: "Asia/Tokyo"
+  });
+}
+
 export function formatDateTimeJa(iso: string): string {
   const d = new Date(iso);
   if (Number.isNaN(d.getTime())) return iso;

@@ -134,6 +134,71 @@ async function viaStooq(ticker: string): Promise<QuoteCore | null> {
   }
 }
 
+interface PostMarketData {
+  postMarketPrice: number | null;
+  postMarketChange: number | null;
+  postMarketChangePercent: number | null;
+  postMarketTime: string | null;
+  preMarketPrice: number | null;
+  preMarketChangePercent: number | null;
+}
+
+async function fetchPostMarket(
+  ticker: string,
+  regularPrice: number | null
+): Promise<PostMarketData | null> {
+  if (regularPrice == null) return null;
+  try {
+    const url = `https://query1.finance.yahoo.com/v10/finance/quoteSummary/${encodeURIComponent(
+      ticker
+    )}?modules=price`;
+    const res = await fetch(url, {
+      cache: "no-store",
+      headers: { "User-Agent": "Mozilla/5.0" }
+    });
+    if (!res.ok) return null;
+    const data = (await res.json()) as {
+      quoteSummary?: {
+        result?: {
+          price?: {
+            postMarketPrice?: { raw?: number };
+            postMarketTime?: number;
+            preMarketPrice?: { raw?: number };
+          };
+        }[];
+      };
+    };
+    const price = data.quoteSummary?.result?.[0]?.price;
+    if (!price) return null;
+
+    const post =
+      typeof price.postMarketPrice?.raw === "number" ? price.postMarketPrice.raw : null;
+    const pre =
+      typeof price.preMarketPrice?.raw === "number" ? price.preMarketPrice.raw : null;
+
+    const postChange = post != null ? post - regularPrice : null;
+    const postChangePercent =
+      post != null && regularPrice !== 0 ? ((post - regularPrice) / regularPrice) * 100 : null;
+    const preChangePercent =
+      pre != null && regularPrice !== 0 ? ((pre - regularPrice) / regularPrice) * 100 : null;
+
+    return {
+      postMarketPrice: post,
+      postMarketChange: postChange,
+      postMarketChangePercent: postChangePercent,
+      postMarketTime:
+        typeof price.postMarketTime === "number"
+          ? new Date(price.postMarketTime * 1000).toISOString()
+          : null,
+      preMarketPrice: pre,
+      preMarketChangePercent: preChangePercent
+    };
+  } catch (e) {
+    console.warn(`[stockProvider] fetchPostMarket(${ticker}) failed:`, (e as Error).message);
+    return null;
+  }
+}
+
 async function viaChart(ticker: string): Promise<QuoteCore | null> {
   try {
     const period1 = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
@@ -188,6 +253,12 @@ export async function fetchQuote(cfg: TickerConfig): Promise<StockQuote> {
       marketState: null,
       fetchedAt: new Date().toISOString(),
       source: "Yahoo Finance",
+      postMarketPrice: null,
+      postMarketChange: null,
+      postMarketChangePercent: null,
+      postMarketTime: null,
+      preMarketPrice: null,
+      preMarketChangePercent: null,
       error: "Yahoo Finance から株価を取得できませんでした (Rate Limit など)"
     };
   }
@@ -199,6 +270,8 @@ export async function fetchQuote(cfg: TickerConfig): Promise<StockQuote> {
       ? ((core.price - core.previousClose) / core.previousClose) * 100
       : null;
 
+  const post = await fetchPostMarket(cfg.ticker, core.price);
+
   const quote: StockQuote = {
     ticker: cfg.ticker,
     displayName: core.displayName || cfg.displayName,
@@ -209,7 +282,13 @@ export async function fetchQuote(cfg: TickerConfig): Promise<StockQuote> {
     currency: core.currency,
     marketState: core.marketState,
     fetchedAt: new Date().toISOString(),
-    source: core.source
+    source: core.source,
+    postMarketPrice: post?.postMarketPrice ?? null,
+    postMarketChange: post?.postMarketChange ?? null,
+    postMarketChangePercent: post?.postMarketChangePercent ?? null,
+    postMarketTime: post?.postMarketTime ?? null,
+    preMarketPrice: post?.preMarketPrice ?? null,
+    preMarketChangePercent: post?.preMarketChangePercent ?? null
   };
 
   cache.set(cfg.ticker, quote, CACHE_TTL_MS.quote);

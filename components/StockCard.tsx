@@ -63,6 +63,48 @@ export function StockCard({ quote }: { quote: StockQuote }) {
         </div>
       </div>
 
+      {quote.postMarketPrice != null && (
+        <div className="rounded-lg bg-slate-100 px-2 py-1.5 text-xs dark:bg-slate-800">
+          <span className="font-medium text-slate-700 dark:text-slate-200">時間外: </span>
+          <span className="tabular-nums">
+            {formatPrice(quote.postMarketPrice, quote.currency)}{" "}
+          </span>
+          <span
+            className={classNames(
+              "tabular-nums",
+              TREND_COLOR[trendOf(quote.postMarketChangePercent)]
+            )}
+          >
+            ({formatPercent(quote.postMarketChangePercent)})
+          </span>
+          {quote.postMarketTime && (
+            <span className="ml-2 text-slate-500 dark:text-slate-400">
+              更新: {new Date(quote.postMarketTime).toLocaleTimeString("ja-JP", {
+                hour: "2-digit",
+                minute: "2-digit",
+                timeZone: "Asia/Tokyo"
+              })}
+            </span>
+          )}
+        </div>
+      )}
+      {quote.preMarketPrice != null && quote.postMarketPrice == null && (
+        <div className="rounded-lg bg-slate-100 px-2 py-1.5 text-xs dark:bg-slate-800">
+          <span className="font-medium text-slate-700 dark:text-slate-200">プレ市場: </span>
+          <span className="tabular-nums">
+            {formatPrice(quote.preMarketPrice, quote.currency)}{" "}
+          </span>
+          <span
+            className={classNames(
+              "tabular-nums",
+              TREND_COLOR[trendOf(quote.preMarketChangePercent)]
+            )}
+          >
+            ({formatPercent(quote.preMarketChangePercent)})
+          </span>
+        </div>
+      )}
+
       <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-slate-500 dark:text-slate-400">
         <span>前日終値: {formatPrice(quote.previousClose, quote.currency)}</span>
         {quote.marketState && <span>市場状態: {quote.marketState}</span>}

@@ -17,6 +17,12 @@ export interface StockQuote {
   marketState: string | null;
   fetchedAt: string;
   source: string;
+  postMarketPrice: number | null;
+  postMarketChange: number | null;
+  postMarketChangePercent: number | null;
+  postMarketTime: string | null;
+  preMarketPrice: number | null;
+  preMarketChangePercent: number | null;
   error?: string;
 }
 

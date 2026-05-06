@@ -1,4 +1,5 @@
 import type { NewsItem } from "../types";
+import { callGeminiWithFallback } from "./geminiClient";
 
 const SYSTEM = `あなたは米国株のニュース要約アシスタントです。
 - 各記事を 2〜4文 (合計 80〜180 字) の日本語要約に変換する。
@@ -37,8 +38,6 @@ export async function translateNewsBatch(
   const apiKey = process.env.GEMINI_API_KEY;
   if (!apiKey) return {};
 
-  const model = process.env.GEMINI_MODEL || "gemini-2.5-flash-lite";
-
   const itemsBlock = items
     .map(
       (n, i) =>
@@ -62,9 +61,6 @@ ${itemsBlock}
 すべての記事について 1 件ずつ summary を返してください。`;
 
   try {
-    const url = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(
-      model
-    )}:generateContent?key=${apiKey}`;
     const useUrlContext = process.env.GEMINI_URL_CONTEXT === "1";
     const body: Record<string, unknown> = {
       system_instruction: { parts: [{ text: SYSTEM }] },
@@ -76,38 +72,22 @@ ${itemsBlock}
     if (useUrlContext) {
       body.tools = [{ url_context: {} }];
     }
-    const res = await fetch(url, {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify(body)
-    });
-    if (!res.ok) {
-      const body = await res.text().catch(() => "");
-      console.warn(
-        `[newsTranslator] gemini status=${res.status} body=${body.slice(0, 300)}`
-      );
-      return {};
-    }
-    const data = (await res.json()) as {
-      candidates?: { content?: { parts?: { text?: string }[] } }[];
-    };
-    const text =
-      data.candidates?.[0]?.content?.parts?.map((p) => p.text ?? "").join("") ?? "";
-    if (!text) {
-      console.warn("[newsTranslator] empty text in response");
-      return {};
-    }
+
+    const result = await callGeminiWithFallback(body, { tag: "newsTranslator" });
+    if (!result) return {};
+    const text = result.text;
+
     const parsed = parseJson(text);
-    const result: Record<string, string> = {};
+    const out: Record<string, string> = {};
     for (const s of parsed?.summaries ?? []) {
-      if (s?.id && s?.ja) result[s.id] = s.ja;
+      if (s?.id && s?.ja) out[s.id] = s.ja;
     }
-    if (Object.keys(result).length === 0) {
+    if (Object.keys(out).length === 0) {
       console.warn(
-        `[newsTranslator] no summaries parsed. preview=${text.slice(0, 200)}`
+        `[newsTranslator] no summaries parsed. model=${result.usedModel} preview=${text.slice(0, 200)}`
       );
     }
-    return result;
+    return out;
   } catch (e) {
     console.warn("[newsTranslator] failed:", (e as Error).message);
     return {};
