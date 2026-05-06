@@ -46,7 +46,8 @@ export async function translateNewsBatch(
     )
     .join("\n\n");
 
-  const userPrompt = `次のニュース記事それぞれについて、URL から本文を取得して 2〜4 文 (合計 80〜180 字) の日本語要約を生成してください。
+  const userPrompt = `次のニュース記事それぞれについて、2〜4 文 (合計 80〜180 字) の日本語要約を生成してください。
+URL から本文を取得できる場合は本文の内容を反映し、取得できない場合はタイトルと出典から読み取れる事実のみを書いてください。
 
 # 記事一覧
 ${itemsBlock}
@@ -64,15 +65,21 @@ ${itemsBlock}
     const url = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(
       model
     )}:generateContent?key=${apiKey}`;
+    const useUrlContext = process.env.GEMINI_URL_CONTEXT === "1";
+    const body: Record<string, unknown> = {
+      system_instruction: { parts: [{ text: SYSTEM }] },
+      contents: [{ role: "user", parts: [{ text: userPrompt }] }],
+      generationConfig: useUrlContext
+        ? { temperature: 0.2 }
+        : { temperature: 0.2, responseMimeType: "application/json" }
+    };
+    if (useUrlContext) {
+      body.tools = [{ url_context: {} }];
+    }
     const res = await fetch(url, {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({
-        system_instruction: { parts: [{ text: SYSTEM }] },
-        contents: [{ role: "user", parts: [{ text: userPrompt }] }],
-        tools: [{ url_context: {} }],
-        generationConfig: { temperature: 0.2 }
-      })
+      body: JSON.stringify(body)
     });
     if (!res.ok) {
       const body = await res.text().catch(() => "");
