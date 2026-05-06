@@ -106,7 +106,7 @@ function parseModelJson(text: string): ModelOutput | null {
 async function callGemini(prompt: string): Promise<string | null> {
   const apiKey = process.env.GEMINI_API_KEY;
   if (!apiKey) return null;
-  const model = process.env.GEMINI_MODEL || "gemini-2.5-flash";
+  const model = process.env.GEMINI_MODEL || "gemini-2.5-flash-lite";
 
   try {
     const url = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(

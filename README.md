@@ -127,7 +127,7 @@ NEXT_PUBLIC_TICKERS=NBIS,TSLA,NVDA,AAPL
 
 優先順位は以下:
 
-1. `GEMINI_API_KEY` があれば Google Gemini (`gemini-2.5-flash` 既定、`GEMINI_MODEL` で変更可) — **無料枠あり・推奨**
+1. `GEMINI_API_KEY` があれば Google Gemini (`gemini-2.5-flash-lite` 既定、`GEMINI_MODEL` で変更可) — **無料枠 1,000 RPD・推奨**
 2. なければ `ANTHROPIC_API_KEY` で Claude (`claude-haiku-4-5-20251001` 既定、`ANTHROPIC_MODEL` で変更可)
 3. なければ `OPENAI_API_KEY` で OpenAI (`gpt-4o-mini` 既定)
 4. どれも無ければ **ルールベース** ([lib/ai/ruleBased.ts](lib/ai/ruleBased.ts))
