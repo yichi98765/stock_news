@@ -46,9 +46,16 @@ async function viaYahooQuery1Chart(ticker: string): Promise<QuoteCore | null> {
     });
     if (!res.ok) return null;
     const data = (await res.json()) as {
-      chart?: { result?: { meta?: Record<string, unknown> }[]; error?: unknown };
+      chart?: {
+        result?: {
+          meta?: Record<string, unknown>;
+          indicators?: { quote?: { close?: (number | null)[] }[] };
+        }[];
+        error?: unknown;
+      };
     };
-    const meta = data.chart?.result?.[0]?.meta as
+    const result = data.chart?.result?.[0];
+    const meta = result?.meta as
       | {
           regularMarketPrice?: number;
           chartPreviousClose?: number;
@@ -59,9 +66,15 @@ async function viaYahooQuery1Chart(ticker: string): Promise<QuoteCore | null> {
         }
       | undefined;
     if (!meta) return null;
+
+    const closes = result?.indicators?.quote?.[0]?.close ?? [];
+    const validCloses = closes.filter((c): c is number => typeof c === "number" && c > 0);
+    const prevFromBars =
+      validCloses.length >= 2 ? validCloses[validCloses.length - 2] : null;
+
     return {
-      price: meta.regularMarketPrice ?? null,
-      previousClose: meta.chartPreviousClose ?? meta.previousClose ?? null,
+      price: meta.regularMarketPrice ?? validCloses[validCloses.length - 1] ?? null,
+      previousClose: prevFromBars ?? meta.previousClose ?? meta.chartPreviousClose ?? null,
       currency: meta.currency ?? "USD",
       displayName: meta.shortName ?? meta.longName ?? null,
       marketState: null,

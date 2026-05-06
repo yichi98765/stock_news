@@ -19,15 +19,27 @@ async function viaYahooQuery1Chart(ticker: string) {
     });
     if (!res.ok) return null;
     const data = (await res.json()) as {
-      chart?: { result?: { meta?: Record<string, unknown> }[] };
+      chart?: {
+        result?: {
+          meta?: Record<string, unknown>;
+          indicators?: { quote?: { close?: (number | null)[] }[] };
+        }[];
+      };
     };
-    const meta = data.chart?.result?.[0]?.meta as
+    const result = data.chart?.result?.[0];
+    const meta = result?.meta as
       | { regularMarketPrice?: number; chartPreviousClose?: number; previousClose?: number }
       | undefined;
     if (!meta) return null;
+
+    const closes = result?.indicators?.quote?.[0]?.close ?? [];
+    const validCloses = closes.filter((c): c is number => typeof c === "number" && c > 0);
+    const prevFromBars =
+      validCloses.length >= 2 ? validCloses[validCloses.length - 2] : null;
+
     return {
-      price: meta.regularMarketPrice ?? null,
-      prev: meta.chartPreviousClose ?? meta.previousClose ?? null
+      price: meta.regularMarketPrice ?? validCloses[validCloses.length - 1] ?? null,
+      prev: prevFromBars ?? meta.previousClose ?? meta.chartPreviousClose ?? null
     };
   } catch {
     return null;

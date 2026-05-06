@@ -11,7 +11,7 @@ const SENTIMENT_BADGE: Record<string, { label: string; cls: string }> = {
 };
 
 export function NewsCard({ item }: { item: NewsItem }) {
-  const [open, setOpen] = useState(false);
+  const [open, setOpen] = useState(true);
   const badge = SENTIMENT_BADGE[item.sentiment];
 
   return (
