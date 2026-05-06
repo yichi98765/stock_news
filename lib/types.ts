@@ -64,7 +64,7 @@ export interface PerTickerSummary {
 
 export interface DailySummary {
   generatedAt: string;
-  generatedBy: "rule-based" | "anthropic" | "openai";
+  generatedBy: "rule-based" | "anthropic" | "openai" | "gemini";
   marketHeadline: string;
   perTicker: PerTickerSummary[];
 }

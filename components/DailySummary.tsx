@@ -11,6 +11,7 @@ const CONFIDENCE_LABEL: Record<string, string> = {
 
 const GENERATED_BY_LABEL: Record<string, string> = {
   "rule-based": "ルールベース自動生成",
+  gemini: "Gemini による要約",
   anthropic: "Claude による要約",
   openai: "OpenAI による要約"
 };

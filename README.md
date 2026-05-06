@@ -30,7 +30,8 @@
 | 株価・指数・セクターETF | Yahoo Finance (`yahoo-finance2`) | 不要 | 非公式。本ツールの既定。 |
 | 銘柄ニュース (基本) | Yahoo Finance Search API | 不要 | yahoo-finance2 経由 |
 | 銘柄ニュース (拡充) | [Finnhub](https://finnhub.io/) | 任意 | 無料60req/min。`FINNHUB_API_KEY` |
-| AI 要約 (推奨) | [Anthropic Claude](https://console.anthropic.com/) | 任意 | `ANTHROPIC_API_KEY` |
+| AI 要約 (無料枠・推奨) | [Google Gemini (AI Studio)](https://aistudio.google.com/apikey) | 任意 | `GEMINI_API_KEY` (無料・クレカ不要) |
+| AI 要約 (有料・高品質) | [Anthropic Claude](https://console.anthropic.com/) | 任意 | `ANTHROPIC_API_KEY` |
 | AI 要約 (代替) | [OpenAI](https://platform.openai.com/) | 任意 | `OPENAI_API_KEY` |
 
 将来的に有料・正式 API へ移行したい場合は [`lib/providers/`](lib/providers/) を差し替えるだけで済みます。
@@ -126,9 +127,19 @@ NEXT_PUBLIC_TICKERS=NBIS,TSLA,NVDA,AAPL
 
 優先順位は以下:
 
-1. `ANTHROPIC_API_KEY` があれば Claude (`claude-haiku-4-5-20251001` 既定、`ANTHROPIC_MODEL` で変更可)
-2. なければ `OPENAI_API_KEY` で OpenAI (`gpt-4o-mini` 既定)
-3. どちらも無ければ **ルールベース** ([lib/ai/ruleBased.ts](lib/ai/ruleBased.ts))
+1. `GEMINI_API_KEY` があれば Google Gemini (`gemini-2.5-flash` 既定、`GEMINI_MODEL` で変更可) — **無料枠あり・推奨**
+2. なければ `ANTHROPIC_API_KEY` で Claude (`claude-haiku-4-5-20251001` 既定、`ANTHROPIC_MODEL` で変更可)
+3. なければ `OPENAI_API_KEY` で OpenAI (`gpt-4o-mini` 既定)
+4. どれも無ければ **ルールベース** ([lib/ai/ruleBased.ts](lib/ai/ruleBased.ts))
+
+### Gemini キーの取り方（無料）
+
+1. <https://aistudio.google.com/apikey> にアクセス（Google アカウント必要）
+2. **Create API key** → プロジェクトを選択 → 払い出された文字列をコピー
+3. ローカル: `.env.local` に `GEMINI_API_KEY=AIza...` を追記して `npm run dev` を再起動
+4. Vercel: ダッシュボード → Project → **Settings → Environment Variables** に `GEMINI_API_KEY` を追加 → Redeploy
+
+クレカ登録不要。1分15リクエスト・1日1500リクエスト程度の無料枠で個人モニタリング用途には十分。
 
 [lib/ai/summarizer.ts](lib/ai/summarizer.ts) の `SYSTEM_PROMPT` で「投資助言禁止」「断定回避」を明示してあります。
 

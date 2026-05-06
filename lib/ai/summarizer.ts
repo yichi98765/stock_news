@@ -103,6 +103,38 @@ function parseModelJson(text: string): ModelOutput | null {
   }
 }
 
+async function callGemini(prompt: string): Promise<string | null> {
+  const apiKey = process.env.GEMINI_API_KEY;
+  if (!apiKey) return null;
+  const model = process.env.GEMINI_MODEL || "gemini-2.5-flash";
+
+  try {
+    const url = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(
+      model
+    )}:generateContent?key=${apiKey}`;
+    const res = await fetch(url, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        system_instruction: { parts: [{ text: SYSTEM_PROMPT }] },
+        contents: [{ role: "user", parts: [{ text: prompt }] }],
+        generationConfig: {
+          temperature: 0.2,
+          responseMimeType: "application/json"
+        }
+      })
+    });
+    if (!res.ok) return null;
+    const data = (await res.json()) as {
+      candidates?: { content?: { parts?: { text?: string }[] } }[];
+    };
+    const text = data.candidates?.[0]?.content?.parts?.map((p) => p.text ?? "").join("") ?? "";
+    return text || null;
+  } catch {
+    return null;
+  }
+}
+
 async function callAnthropic(prompt: string): Promise<string | null> {
   const apiKey = process.env.ANTHROPIC_API_KEY;
   if (!apiKey) return null;
@@ -166,7 +198,7 @@ async function callOpenAI(prompt: string): Promise<string | null> {
 function mapModelToSummary(
   parsed: ModelOutput,
   input: SummaryInput,
-  by: "anthropic" | "openai"
+  by: "anthropic" | "openai" | "gemini"
 ): DailySummary {
   const perTicker: PerTickerSummary[] = input.quotes.map((q) => {
     const fromModel = parsed.perTicker.find((t) => t.ticker === q.ticker);
@@ -203,6 +235,14 @@ function mapModelToSummary(
 
 export async function summarize(input: SummaryInput): Promise<DailySummary> {
   const prompt = buildUserPrompt(input);
+
+  if (process.env.GEMINI_API_KEY) {
+    const text = await callGemini(prompt);
+    if (text) {
+      const parsed = parseModelJson(text);
+      if (parsed) return mapModelToSummary(parsed, input, "gemini");
+    }
+  }
 
   if (process.env.ANTHROPIC_API_KEY) {
     const text = await callAnthropic(prompt);
