@@ -1,6 +1,7 @@
 import type { NewsItem, Sentiment, TickerConfig } from "../types";
 import { CACHE_TTL_MS } from "../config";
 import { createTtlCache } from "../utils";
+import { translateNewsBatch } from "../ai/newsTranslator";
 
 const cache = createTtlCache<NewsItem[]>();
 
@@ -155,11 +156,33 @@ export async function fetchNews(cfg: TickerConfig): Promise<NewsItem[]> {
   return top;
 }
 
+const PLACEHOLDER_RE = /^\(要約なし/;
+
+async function ensureJapaneseSummaries(
+  byTicker: Record<string, NewsItem[]>
+): Promise<void> {
+  if (!process.env.GEMINI_API_KEY) return;
+  const all = Object.values(byTicker).flat();
+  const needs = all.filter(
+    (n) => !n.summary || PLACEHOLDER_RE.test(n.summary) || /^[\x00-\x7F\s]+$/.test(n.summary)
+  );
+  if (needs.length === 0) return;
+
+  const translations = await translateNewsBatch(needs);
+  if (Object.keys(translations).length === 0) return;
+  for (const item of all) {
+    const ja = translations[item.id];
+    if (ja) item.summary = ja;
+  }
+}
+
 export async function fetchAllNews(
   cfgs: TickerConfig[]
 ): Promise<Record<string, NewsItem[]>> {
   const entries = await Promise.all(
     cfgs.map(async (c) => [c.ticker, await fetchNews(c)] as const)
   );
-  return Object.fromEntries(entries);
+  const byTicker = Object.fromEntries(entries);
+  await ensureJapaneseSummaries(byTicker);
+  return byTicker;
 }
