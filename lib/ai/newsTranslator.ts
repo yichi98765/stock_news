@@ -1,12 +1,33 @@
 import type { NewsItem } from "../types";
 
-const SYSTEM = `あなたは米国株のニュースタイトル一覧を日本語に要約するアシスタントです。
-ルール:
-- 各タイトルを 1〜2文 (40〜90字程度) の日本語に圧縮する。
-- タイトルから読み取れる事実のみを書き、推測や誇張は避ける。
-- 投資助言は禁止。「買うべき/売るべき」表現を使わない。
+const SYSTEM = `あなたは米国株のニュース要約アシスタントです。
+- 各記事を 2〜4文 (合計 80〜180 字) の日本語要約に変換する。
+- URL から記事本文を取得できた場合は本文の内容を反映する。取得失敗時はタイトルから読み取れる事実のみを書く。
+- 「買うべき/売るべき」のような投資助言は禁止。
 - 不確かな部分は「〜の可能性がある」と書く。
-- 必ず指定 JSON スキーマで返す。`;
+- 必ず指定された JSON 形式のみを出力し、コードブロックや説明文を一切付けない。`;
+
+interface ParsedSummaries {
+  summaries?: { id?: string; ja?: string }[];
+}
+
+function parseJson(text: string): ParsedSummaries | null {
+  const cleaned = text
+    .replace(/^```(?:json)?\s*/i, "")
+    .replace(/```\s*$/, "")
+    .trim();
+  try {
+    return JSON.parse(cleaned) as ParsedSummaries;
+  } catch {
+    const match = cleaned.match(/\{[\s\S]*\}/);
+    if (!match) return null;
+    try {
+      return JSON.parse(match[0]) as ParsedSummaries;
+    } catch {
+      return null;
+    }
+  }
+}
 
 export async function translateNewsBatch(
   items: NewsItem[]
@@ -18,26 +39,26 @@ export async function translateNewsBatch(
 
   const model = process.env.GEMINI_MODEL || "gemini-2.5-flash";
 
-  const payload = items.map((n) => ({
-    id: n.id,
-    title: n.title,
-    ticker: n.ticker,
-    source: n.source,
-    sentiment: n.sentiment
-  }));
+  const itemsBlock = items
+    .map(
+      (n, i) =>
+        `${i + 1}. id: "${n.id}"\n   title: ${n.title}\n   source: ${n.source}\n   url: ${n.url}`
+    )
+    .join("\n\n");
 
-  const userPrompt = `以下のニュースタイトルを各 1〜2 文の日本語要約に変換してください。
-出力スキーマ:
+  const userPrompt = `次のニュース記事それぞれについて、URL から本文を取得して 2〜4 文 (合計 80〜180 字) の日本語要約を生成してください。
+
+# 記事一覧
+${itemsBlock}
+
+# 出力スキーマ (JSON のみ)
 {
   "summaries": [
-    { "id": string, "ja": string }
+    { "id": "<入力と同じ id 文字列>", "ja": "<日本語要約>" }
   ]
 }
 
-# 入力 (英語タイトル)
-${JSON.stringify(payload, null, 2)}
-
-JSON 以外を一切出力しないこと。id は入力と同じ値をそのまま返すこと。`;
+すべての記事について 1 件ずつ summary を返してください。`;
 
   try {
     const url = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(
@@ -49,30 +70,39 @@ JSON 以外を一切出力しないこと。id は入力と同じ値をそのま
       body: JSON.stringify({
         system_instruction: { parts: [{ text: SYSTEM }] },
         contents: [{ role: "user", parts: [{ text: userPrompt }] }],
-        generationConfig: {
-          temperature: 0.2,
-          responseMimeType: "application/json"
-        }
+        tools: [{ url_context: {} }],
+        generationConfig: { temperature: 0.2 }
       })
     });
     if (!res.ok) {
-      console.warn(`[newsTranslator] gemini status=${res.status}`);
+      const body = await res.text().catch(() => "");
+      console.warn(
+        `[newsTranslator] gemini status=${res.status} body=${body.slice(0, 300)}`
+      );
       return {};
     }
     const data = (await res.json()) as {
       candidates?: { content?: { parts?: { text?: string }[] } }[];
     };
-    const text = data.candidates?.[0]?.content?.parts?.map((p) => p.text ?? "").join("") ?? "";
-    if (!text) return {};
-
-    const parsed = JSON.parse(text) as { summaries?: { id?: string; ja?: string }[] };
+    const text =
+      data.candidates?.[0]?.content?.parts?.map((p) => p.text ?? "").join("") ?? "";
+    if (!text) {
+      console.warn("[newsTranslator] empty text in response");
+      return {};
+    }
+    const parsed = parseJson(text);
     const result: Record<string, string> = {};
-    for (const s of parsed.summaries ?? []) {
+    for (const s of parsed?.summaries ?? []) {
       if (s?.id && s?.ja) result[s.id] = s.ja;
+    }
+    if (Object.keys(result).length === 0) {
+      console.warn(
+        `[newsTranslator] no summaries parsed. preview=${text.slice(0, 200)}`
+      );
     }
     return result;
   } catch (e) {
-    console.warn(`[newsTranslator] failed:`, (e as Error).message);
+    console.warn("[newsTranslator] failed:", (e as Error).message);
     return {};
   }
 }
