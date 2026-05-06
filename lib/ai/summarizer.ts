@@ -124,13 +124,29 @@ async function callGemini(prompt: string): Promise<string | null> {
         }
       })
     });
-    if (!res.ok) return null;
+    if (!res.ok) {
+      const body = await res.text().catch(() => "");
+      console.warn(
+        `[summarizer] gemini status=${res.status} body=${body.slice(0, 300)}`
+      );
+      return null;
+    }
     const data = (await res.json()) as {
       candidates?: { content?: { parts?: { text?: string }[] } }[];
+      promptFeedback?: { blockReason?: string };
     };
-    const text = data.candidates?.[0]?.content?.parts?.map((p) => p.text ?? "").join("") ?? "";
+    if (data.promptFeedback?.blockReason) {
+      console.warn(
+        `[summarizer] gemini blocked: ${data.promptFeedback.blockReason}`
+      );
+      return null;
+    }
+    const text =
+      data.candidates?.[0]?.content?.parts?.map((p) => p.text ?? "").join("") ?? "";
+    if (!text) console.warn("[summarizer] gemini empty text");
     return text || null;
-  } catch {
+  } catch (e) {
+    console.warn(`[summarizer] gemini threw: ${(e as Error).message}`);
     return null;
   }
 }
