@@ -1,0 +1,57 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  color-scheme: light dark;
+}
+
+html,
+body {
+  @apply bg-slate-50 text-slate-900;
+  -webkit-tap-highlight-color: transparent;
+}
+
+html.dark,
+html.dark body {
+  @apply bg-slate-950 text-slate-100;
+}
+
+@layer components {
+  .card {
+    @apply rounded-2xl bg-white shadow-sm ring-1 ring-slate-200 p-4 sm:p-5;
+  }
+  .dark .card {
+    @apply bg-slate-900 ring-slate-800 shadow-none;
+  }
+
+  .badge {
+    @apply inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium;
+  }
+  .badge-up {
+    @apply bg-up-soft text-up;
+  }
+  .dark .badge-up {
+    @apply bg-up/20 text-up-dark;
+  }
+  .badge-down {
+    @apply bg-down-soft text-down;
+  }
+  .dark .badge-down {
+    @apply bg-down/20 text-down-dark;
+  }
+  .badge-neutral {
+    @apply bg-slate-200 text-slate-700;
+  }
+  .dark .badge-neutral {
+    @apply bg-slate-800 text-slate-300;
+  }
+
+}
+
+.dark .text-up {
+  color: theme("colors.up.dark");
+}
+.dark .text-down {
+  color: theme("colors.down.dark");
+}
