@@ -30,11 +30,28 @@ export function trendOf(percent: number | null): Sentiment {
 }
 
 export function todayJaLabel(): string {
-  return new Date().toLocaleDateString("ja-JP", {
+  const now = new Date();
+  const date = now.toLocaleDateString("ja-JP", {
     year: "numeric",
     month: "2-digit",
     day: "2-digit",
     weekday: "short",
+    timeZone: "Asia/Tokyo"
+  });
+  const time = now.toLocaleTimeString("ja-JP", {
+    hour: "2-digit",
+    minute: "2-digit",
+    timeZone: "Asia/Tokyo"
+  });
+  return `${date} ${time}`;
+}
+
+export function timeJa(iso: string): string {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return iso;
+  return d.toLocaleTimeString("ja-JP", {
+    hour: "2-digit",
+    minute: "2-digit",
     timeZone: "Asia/Tokyo"
   });
 }

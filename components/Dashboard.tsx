@@ -14,7 +14,7 @@ import { MarketOverview } from "./MarketOverview";
 import { NewsCard } from "./NewsCard";
 import { StockCard } from "./StockCard";
 import { ThemeToggle } from "./ThemeToggle";
-import { classNames, formatDateTimeJa, todayJaLabel } from "@/lib/utils";
+import { classNames, formatDateTimeJa, timeJa, todayJaLabel } from "@/lib/utils";
 
 interface SummaryResponse {
   summary: DailySummaryType;
@@ -38,6 +38,14 @@ export function Dashboard() {
   const [macroLoading, setMacroLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [activeTicker, setActiveTicker] = useState<string | null>(null);
+  const [nowLabel, setNowLabel] = useState<string>("");
+
+  useEffect(() => {
+    const tick = () => setNowLabel(todayJaLabel());
+    tick();
+    const id = setInterval(tick, 30_000);
+    return () => clearInterval(id);
+  }, []);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -95,7 +103,17 @@ export function Dashboard() {
         <div>
           <h1 className="text-xl font-bold sm:text-2xl">Stock Finder</h1>
           <p className="text-xs text-slate-500 dark:text-slate-400">
-            {todayJaLabel()} (JST) — 米国株モニター
+            {nowLabel} JST{" "}
+            {data && (
+              <span className="ml-1">
+                ／ データ取得 {timeJa(data.summary.generatedAt)}
+              </span>
+            )}
+            {tab === "macro" && macroData && (
+              <span className="ml-1">
+                ／ マクロ取得 {timeJa(macroData.fetchedAt)}
+              </span>
+            )}
           </p>
         </div>
         <div className="flex items-center gap-2">
