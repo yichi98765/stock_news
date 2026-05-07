@@ -18,6 +18,35 @@ export async function GET() {
     return NextResponse.json({ ok: false, reason: "no_key", ...checks });
   }
 
+  // 利用可能なモデル一覧を取得 (generateContent をサポートし、無料 lite 系を抜粋)
+  let availableLiteModels: { name: string; displayName?: string }[] = [];
+  let availableModelCount = 0;
+  try {
+    const listRes = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models?key=${apiKey}`
+    );
+    if (listRes.ok) {
+      const listData = (await listRes.json()) as {
+        models?: {
+          name: string;
+          displayName?: string;
+          supportedGenerationMethods?: string[];
+        }[];
+      };
+      const all = listData.models ?? [];
+      availableModelCount = all.length;
+      availableLiteModels = all
+        .filter(
+          (m) =>
+            (m.supportedGenerationMethods ?? []).includes("generateContent") &&
+            /flash|lite/i.test(m.name)
+        )
+        .map((m) => ({ name: m.name, displayName: m.displayName }));
+    }
+  } catch {
+    // ignore
+  }
+
   const probes: { model: string; status: number; ok: boolean; bodyPreview?: string }[] = [];
 
   for (const model of chain) {
@@ -51,6 +80,8 @@ export async function GET() {
   return NextResponse.json({
     ok: probes.some((p) => p.ok),
     ...checks,
+    availableModelCount,
+    availableLiteModels,
     probes
   });
 }
