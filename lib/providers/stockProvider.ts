@@ -147,51 +147,80 @@ async function fetchPostMarket(
   ticker: string,
   regularPrice: number | null
 ): Promise<PostMarketData | null> {
-  if (regularPrice == null) return null;
+  if (regularPrice == null || regularPrice === 0) return null;
   try {
-    const url = `https://query1.finance.yahoo.com/v10/finance/quoteSummary/${encodeURIComponent(
+    const period2 = Math.floor(Date.now() / 1000);
+    const period1 = period2 - 36 * 60 * 60;
+    const url = `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(
       ticker
-    )}?modules=price`;
+    )}?interval=5m&period1=${period1}&period2=${period2}&includePrePost=true`;
     const res = await fetch(url, {
       cache: "no-store",
       headers: { "User-Agent": "Mozilla/5.0" }
     });
-    if (!res.ok) return null;
+    if (!res.ok) {
+      console.warn(`[stockProvider] fetchPostMarket(${ticker}) status=${res.status}`);
+      return null;
+    }
     const data = (await res.json()) as {
-      quoteSummary?: {
+      chart?: {
         result?: {
-          price?: {
-            postMarketPrice?: { raw?: number };
-            postMarketTime?: number;
-            preMarketPrice?: { raw?: number };
+          meta?: {
+            regularMarketTime?: number;
+            currentTradingPeriod?: { pre?: { start?: number } };
           };
+          timestamp?: number[];
+          indicators?: { quote?: { close?: (number | null)[] }[] };
         }[];
       };
     };
-    const price = data.quoteSummary?.result?.[0]?.price;
-    if (!price) return null;
+    const result = data.chart?.result?.[0];
+    if (!result) return null;
 
-    const post =
-      typeof price.postMarketPrice?.raw === "number" ? price.postMarketPrice.raw : null;
-    const pre =
-      typeof price.preMarketPrice?.raw === "number" ? price.preMarketPrice.raw : null;
+    const regTime = result.meta?.regularMarketTime;
+    const preStart = result.meta?.currentTradingPeriod?.pre?.start;
+    const timestamps = result.timestamp ?? [];
+    const closes = result.indicators?.quote?.[0]?.close ?? [];
 
-    const postChange = post != null ? post - regularPrice : null;
-    const postChangePercent =
-      post != null && regularPrice !== 0 ? ((post - regularPrice) / regularPrice) * 100 : null;
-    const preChangePercent =
-      pre != null && regularPrice !== 0 ? ((pre - regularPrice) / regularPrice) * 100 : null;
+    if (!regTime || timestamps.length === 0 || closes.length === 0) return null;
+
+    let latestIdx = -1;
+    for (let i = closes.length - 1; i >= 0; i--) {
+      const c = closes[i];
+      if (typeof c === "number" && c > 0) {
+        latestIdx = i;
+        break;
+      }
+    }
+    if (latestIdx < 0) return null;
+
+    const latestTs = timestamps[latestIdx];
+    const latestClose = closes[latestIdx] as number;
+
+    if (latestTs <= regTime) return null;
+
+    const isPreMarket = typeof preStart === "number" && latestTs >= preStart;
+    const change = latestClose - regularPrice;
+    const changePercent = (change / regularPrice) * 100;
+
+    if (isPreMarket) {
+      return {
+        postMarketPrice: null,
+        postMarketChange: null,
+        postMarketChangePercent: null,
+        postMarketTime: null,
+        preMarketPrice: latestClose,
+        preMarketChangePercent: changePercent
+      };
+    }
 
     return {
-      postMarketPrice: post,
-      postMarketChange: postChange,
-      postMarketChangePercent: postChangePercent,
-      postMarketTime:
-        typeof price.postMarketTime === "number"
-          ? new Date(price.postMarketTime * 1000).toISOString()
-          : null,
-      preMarketPrice: pre,
-      preMarketChangePercent: preChangePercent
+      postMarketPrice: latestClose,
+      postMarketChange: change,
+      postMarketChangePercent: changePercent,
+      postMarketTime: new Date(latestTs * 1000).toISOString(),
+      preMarketPrice: null,
+      preMarketChangePercent: null
     };
   } catch (e) {
     console.warn(`[stockProvider] fetchPostMarket(${ticker}) failed:`, (e as Error).message);
