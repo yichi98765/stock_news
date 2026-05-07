@@ -128,7 +128,7 @@ NEXT_PUBLIC_TICKERS=NBIS,TSLA,NVDA,AAPL
 優先順位は以下:
 
 1. `GEMINI_API_KEY` があれば Google Gemini — **無料枠あり・推奨**
-   - 既定で複数モデルを順に試す: `gemini-3.1-flash-lite` (500 RPD) → `gemini-2.5-flash-lite` (20 RPD) → `gemini-2.0-flash` → `gemini-2.5-flash`
+   - 既定で複数モデルを順に試す: `gemini-3.1-flash-lite-preview` (500 RPD) → `gemini-flash-lite-latest` → `gemini-2.5-flash-lite` (20 RPD) → `gemini-2.0-flash-lite` → `gemini-flash-latest` → `gemini-2.5-flash`
    - 1日のクォータが尽きても次のモデルにフォールバックする
    - `GEMINI_MODEL` で最優先モデル指定、`GEMINI_MODELS` (カンマ区切り) で全置換可能
 2. なければ `ANTHROPIC_API_KEY` で Claude (`claude-haiku-4-5-20251001` 既定、`ANTHROPIC_MODEL` で変更可)

@@ -4,9 +4,11 @@ export interface GeminiResult {
 }
 
 const DEFAULT_MODELS = [
-  "gemini-3.1-flash-lite",
+  "gemini-3.1-flash-lite-preview",
+  "gemini-flash-lite-latest",
   "gemini-2.5-flash-lite",
-  "gemini-2.0-flash",
+  "gemini-2.0-flash-lite",
+  "gemini-flash-latest",
   "gemini-2.5-flash"
 ];
 
