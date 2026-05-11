@@ -1,7 +1,8 @@
-import type { NewsItem, Sentiment, TickerConfig } from "../types";
+import type { NewsImportance, NewsItem, Sentiment, TickerConfig } from "../types";
 import { CACHE_TTL_MS } from "../config";
 import { createTtlCache } from "../utils";
 import { translateNewsBatch } from "../ai/newsTranslator";
+import { refineNewsImportance } from "../ai/newsImportance";
 
 const cache = createTtlCache<NewsItem[]>();
 
@@ -18,6 +19,38 @@ const NEGATIVE_KEYWORDS = [
   "下落", "下方修正", "減収", "減益", "格下げ", "リコール", "訴訟", "調査", "懸念", "失望"
 ];
 
+const IMPORTANCE_RULES: { keyword: string; score: number; label: string }[] = [
+  { keyword: "earnings", score: 35, label: "決算" },
+  { keyword: "results", score: 25, label: "決算/業績" },
+  { keyword: "revenue", score: 20, label: "売上" },
+  { keyword: "eps", score: 25, label: "EPS" },
+  { keyword: "guidance", score: 35, label: "ガイダンス" },
+  { keyword: "forecast", score: 25, label: "見通し" },
+  { keyword: "upgrade", score: 25, label: "格上げ" },
+  { keyword: "downgrade", score: 35, label: "格下げ" },
+  { keyword: "price target", score: 20, label: "目標株価" },
+  { keyword: "sec", score: 30, label: "SEC" },
+  { keyword: "8-k", score: 35, label: "SEC 8-K" },
+  { keyword: "10-k", score: 35, label: "SEC 10-K" },
+  { keyword: "10-q", score: 35, label: "SEC 10-Q" },
+  { keyword: "lawsuit", score: 35, label: "訴訟" },
+  { keyword: "probe", score: 30, label: "調査" },
+  { keyword: "investigation", score: 30, label: "調査" },
+  { keyword: "merger", score: 35, label: "合併" },
+  { keyword: "acquisition", score: 35, label: "買収" },
+  { keyword: "partnership", score: 20, label: "提携" },
+  { keyword: "contract", score: 20, label: "契約" },
+  { keyword: "recall", score: 30, label: "リコール" },
+  { keyword: "決算", score: 35, label: "決算" },
+  { keyword: "上方修正", score: 35, label: "上方修正" },
+  { keyword: "下方修正", score: 35, label: "下方修正" },
+  { keyword: "格上げ", score: 25, label: "格上げ" },
+  { keyword: "格下げ", score: 35, label: "格下げ" },
+  { keyword: "訴訟", score: 35, label: "訴訟" },
+  { keyword: "調査", score: 30, label: "調査" },
+  { keyword: "買収", score: 35, label: "買収" }
+];
+
 function classify(title: string, summary: string): { sentiment: Sentiment; reason: string } {
   const text = `${title} ${summary}`.toLowerCase();
   const posHits = POSITIVE_KEYWORDS.filter((k) => text.includes(k.toLowerCase()));
@@ -30,6 +63,30 @@ function classify(title: string, summary: string): { sentiment: Sentiment; reaso
     return { sentiment: "down", reason: `ネガティブ語: ${negHits.slice(0, 3).join(", ")}` };
   }
   return { sentiment: "neutral", reason: "明確なポジ/ネガ語なし" };
+}
+
+function scoreImportance(
+  title: string,
+  summary: string
+): { importance: NewsImportance; score: number; reason: string } {
+  const text = `${title} ${summary}`.toLowerCase();
+  const hits: string[] = [];
+  let score = 10;
+
+  for (const rule of IMPORTANCE_RULES) {
+    if (text.includes(rule.keyword.toLowerCase())) {
+      score += rule.score;
+      hits.push(rule.label);
+    }
+  }
+
+  score = Math.min(score, 100);
+  const importance: NewsImportance = score >= 70 ? "high" : score >= 35 ? "medium" : "low";
+  return {
+    importance,
+    score,
+    reason: hits.length > 0 ? `重要語: ${Array.from(new Set(hits)).slice(0, 4).join(", ")}` : "重要語なし"
+  };
 }
 
 interface YahooSearchNews {
@@ -65,6 +122,7 @@ async function fetchYahooNews(ticker: string): Promise<NewsItem[]> {
       const title = n.title ?? "";
       const summary = n.summary ?? "";
       const cls = classify(title, summary);
+      const importance = scoreImportance(title, summary);
       const ts =
         typeof n.providerPublishTime === "number"
           ? new Date(n.providerPublishTime * 1000).toISOString()
@@ -79,7 +137,10 @@ async function fetchYahooNews(ticker: string): Promise<NewsItem[]> {
         url: n.link ?? "#",
         publishedAt: ts,
         sentiment: cls.sentiment,
-        sentimentReason: cls.reason
+        sentimentReason: cls.reason,
+        importance: importance.importance,
+        importanceScore: importance.score,
+        importanceReason: importance.reason
       };
     });
 }
@@ -112,6 +173,7 @@ async function fetchFinnhubNews(ticker: string): Promise<NewsItem[]> {
     const items = (await res.json()) as FinnhubNewsItem[];
     return items.slice(0, 15).map((n) => {
       const cls = classify(n.headline ?? "", n.summary ?? "");
+      const importance = scoreImportance(n.headline ?? "", n.summary ?? "");
       return {
         id: `fh-${n.id}`,
         ticker,
@@ -121,7 +183,10 @@ async function fetchFinnhubNews(ticker: string): Promise<NewsItem[]> {
         url: n.url,
         publishedAt: new Date(n.datetime * 1000).toISOString(),
         sentiment: cls.sentiment,
-        sentimentReason: cls.reason
+        sentimentReason: cls.reason,
+        importance: importance.importance,
+        importanceScore: importance.score,
+        importanceReason: importance.reason
       };
     });
   } catch {
@@ -152,6 +217,7 @@ export async function fetchNews(cfg: TickerConfig): Promise<NewsItem[]> {
   );
 
   const top = merged.slice(0, 12);
+  await refineNewsImportance(top);
   cache.set(cfg.ticker, top, CACHE_TTL_MS.news);
   return top;
 }

@@ -8,6 +8,7 @@ import {
   formatPrice,
   trendOf
 } from "@/lib/utils";
+import { StockChart } from "./StockChart";
 
 const TREND_COLOR: Record<string, string> = {
   up: "text-up",
@@ -110,6 +111,8 @@ export function StockCard({ quote }: { quote: StockQuote }) {
         {quote.marketState && <span>市場状態: {quote.marketState}</span>}
         <span>取得元: {quote.source}</span>
       </div>
+
+      {!quote.error && <StockChart ticker={quote.ticker} currency={quote.currency} />}
 
       {quote.error && (
         <div className="rounded-md bg-down-soft px-2 py-1 text-xs text-down dark:bg-down/20">

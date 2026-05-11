@@ -93,7 +93,10 @@ async function fetchGoogleNews(query: string, max: number): Promise<NewsItem[]> 
           url: r.link,
           publishedAt: ts,
           sentiment: "neutral" as Sentiment,
-          sentimentReason: "(マクロニュースは未分類)"
+          sentimentReason: "(マクロニュースは未分類)",
+          importance: "medium",
+          importanceScore: 40,
+          importanceReason: "マクロカテゴリ一致"
         };
       });
   } catch (e) {

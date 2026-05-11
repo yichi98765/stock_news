@@ -13,6 +13,10 @@
 - セクターローテーション・市場テーマの自動推定（金利・AI・EV など）
 - iPhone と PC の両対応レスポンシブ + ダークモード切替
 - AI 要約は Claude / OpenAI を任意で差し替え可能。**APIキー無しでもルールベースで動作**。
+- 保有数量・取得単価の端末保存、評価損益・銘柄比率表示、JSON入出力
+- 1日/5日/1か月/6か月チャート、出来高、前日終値ライン、ローソク足、プレ/アフター市場切替
+- 価格・前日比・ニュース語句アラート、ブラウザ通知、Slack/Pushover/LINE/Email/Webhook 送信
+- 日次アーカイブで要約と保有損益を保存
 
 ## 技術構成
 
@@ -148,17 +152,30 @@ NEXT_PUBLIC_TICKERS=NBIS,TSLA,NVDA,AAPL
 
 ## ニュースのポジ/ネガ分類
 
-[lib/providers/newsProvider.ts](lib/providers/newsProvider.ts) で英語/日本語のキーワード辞書を使った素朴な分類。誤分類は前提なので、画面では「分類根拠（ヒットしたキーワード）」を確認できます。本格運用ではここを **Claude による sentiment 抽出** に差し替えるのが推奨ルートです。
+[lib/providers/newsProvider.ts](lib/providers/newsProvider.ts) で英語/日本語のキーワード辞書を使った素朴な分類。誤分類は前提なので、画面では「分類根拠（ヒットしたキーワード）」を確認できます。重要度はキーワード判定を初期値にし、`GEMINI_API_KEY` / `ANTHROPIC_API_KEY` / `OPENAI_API_KEY` がある場合は AI 判定で `重要/普通/軽微` と理由を補正します。
+
+## 外部アラート通知
+
+画面内通知とブラウザ通知は設定なしで使えます。外部通知を使う場合は `.env.local` に必要なキーだけを設定してください。
+
+```env
+SLACK_WEBHOOK_URL=
+PUSHOVER_APP_TOKEN=
+PUSHOVER_USER_KEY=
+LINE_CHANNEL_ACCESS_TOKEN=
+LINE_USER_ID=
+RESEND_API_KEY=
+ALERT_EMAIL_TO=
+ALERT_WEBHOOK_URL=
+```
+
+設定済みの送信先はアラート欄の「接続」に表示されます。外部通知は同じ条件で30分以内に重複送信しないようにしています。
 
 ## 今後の拡張案
 
 - **永続キャッシュ**: 現状はインメモリ。Upstash Redis や Vercel KV に差し替えるとデプロイ時の冷起動でも軽くなります。
-- **チャート**: `lightweight-charts` でローソク足を追加。`yahoo-finance2.historical()` でデータ取得可能。
-- **ポートフォリオ機能**: 数量・取得単価を入力してP/Lを表示（`localStorage` 保管）。
-- **アラート**: 指定価格・日次変動率・特定キーワードのニュース検知 → Pushover / Slack / LINE Notify 連携。
 - **PWA 対応**: `manifest.json` + Service Worker でオフライン表示。
 - **要約の質向上**: Claude のニュース要約モデル + tool use で SEC EDGAR 直近 8-K の自動取り込み。
-- **時系列保存**: 日次の要約を Markdown でアーカイブし、「先週の自分のポートフォリオの動き」を遡れるように。
 - **マルチユーザー**: 認証（NextAuth）+ ユーザー別銘柄リスト。
 - **アナリスト評価**: Finnhub の `/stock/recommendation` で目標株価・買い/売り推奨数の推移を表示。
 - **マクロ指標**: FRED API で 10年金利・CPI・FFレートを取得。

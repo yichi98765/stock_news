@@ -37,7 +37,21 @@ export function getTickers(): TickerConfig[] {
 
   if (tickers.length === 0) return DEFAULT_TICKERS;
 
-  return tickers.map((ticker) => {
+  return tickerConfigsFromSymbols(tickers);
+}
+
+export function tickerConfigsFromSymbols(symbols: string[]): TickerConfig[] {
+  const unique = Array.from(
+    new Set(
+      symbols
+        .map((t) => t.trim().toUpperCase())
+        .filter((t) => /^[A-Z0-9.^-]{1,12}$/.test(t))
+    )
+  );
+
+  if (unique.length === 0) return DEFAULT_TICKERS;
+
+  return unique.map((ticker) => {
     const found = DEFAULT_TICKERS.find((d) => d.ticker === ticker);
     if (found) return found;
     return {
@@ -46,6 +60,11 @@ export function getTickers(): TickerConfig[] {
       sectorTagsJa: []
     };
   });
+}
+
+export function getTickersFromSearchParam(raw: string | null): TickerConfig[] {
+  if (!raw) return getTickers();
+  return tickerConfigsFromSymbols(raw.split(","));
 }
 
 export const MARKET_INDICES: { ticker: string; displayName: string }[] = [

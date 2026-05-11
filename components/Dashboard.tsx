@@ -5,15 +5,21 @@ import type {
   DailySummary as DailySummaryType,
   MarketOverview as MarketOverviewType,
   NewsItem,
+  PortfolioSnapshot,
   StockQuote
 } from "@/lib/types";
+import { ArchivePanel } from "./ArchivePanel";
 import { DailySummary } from "./DailySummary";
+import { DataToolsPanel, type ExportData } from "./DataToolsPanel";
 import { Disclaimer } from "./Disclaimer";
 import { MacroNews, type MacroCategory } from "./MacroNews";
 import { MarketOverview } from "./MarketOverview";
 import { NewsCard } from "./NewsCard";
+import { AlertsPanel, type AlertRule } from "./AlertsPanel";
+import { PortfolioPanel, type Holdings } from "./PortfolioPanel";
 import { StockCard } from "./StockCard";
 import { ThemeToggle } from "./ThemeToggle";
+import { WatchlistManager } from "./WatchlistManager";
 import { classNames, formatDateTimeJa, timeJa, todayJaLabel } from "@/lib/utils";
 
 interface SummaryResponse {
@@ -30,6 +36,118 @@ interface MacroResponse {
 
 type Tab = "home" | "macro";
 
+const STORAGE_KEYS = {
+  tickers: "stockFinder.watchlist.v1",
+  holdings: "stockFinder.holdings.v1",
+  alerts: "stockFinder.alerts.v1",
+  archives: "stockFinder.archives.v1"
+};
+
+function parseStringArray(raw: string | null): string[] | null {
+  if (!raw) return null;
+  try {
+    const parsed = JSON.parse(raw);
+    if (!Array.isArray(parsed)) return null;
+    const tickers = parsed
+      .map((v) => String(v).trim().toUpperCase())
+      .filter((v) => /^[A-Z0-9.^-]{1,12}$/.test(v));
+    return tickers.length > 0 ? Array.from(new Set(tickers)) : null;
+  } catch {
+    return null;
+  }
+}
+
+function parseHoldings(raw: string | null): Holdings {
+  if (!raw) return {};
+  try {
+    const parsed = JSON.parse(raw) as Record<string, unknown>;
+    return Object.fromEntries(
+      Object.entries(parsed)
+        .map(([ticker, value]) => {
+          const h = value as Partial<{ shares: number; costBasis: number }>;
+          return [
+            ticker.toUpperCase(),
+            {
+              shares: Number.isFinite(h.shares) ? Number(h.shares) : 0,
+              costBasis: Number.isFinite(h.costBasis) ? Number(h.costBasis) : 0
+            }
+          ] as const;
+        })
+        .filter(([ticker]) => /^[A-Z0-9.^-]{1,12}$/.test(ticker))
+    );
+  } catch {
+    return {};
+  }
+}
+
+function parseAlerts(raw: string | null): AlertRule[] {
+  if (!raw) return [];
+  try {
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? (parsed as AlertRule[]) : [];
+  } catch {
+    return [];
+  }
+}
+
+function parseArchives(raw: string | null): PortfolioSnapshot[] {
+  if (!raw) return [];
+  try {
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? (parsed as PortfolioSnapshot[]) : [];
+  } catch {
+    return [];
+  }
+}
+
+function todayKeyJa(): string {
+  return new Date().toLocaleDateString("ja-JP", {
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    timeZone: "Asia/Tokyo"
+  });
+}
+
+function buildSnapshot(
+  data: SummaryResponse,
+  holdings: Holdings
+): PortfolioSnapshot {
+  const rows = data.quotes.map((quote) => {
+    const holding = holdings[quote.ticker] ?? { shares: 0, costBasis: 0 };
+    const price = quote.price ?? 0;
+    const marketValue = holding.shares * price;
+    const cost = holding.shares * holding.costBasis;
+    const pnl = marketValue - cost;
+    const pnlPercent = cost > 0 ? (pnl / cost) * 100 : null;
+    return {
+      ticker: quote.ticker,
+      displayName: quote.displayName,
+      shares: holding.shares,
+      costBasis: holding.costBasis,
+      price: quote.price,
+      marketValue,
+      pnl,
+      pnlPercent
+    };
+  });
+  const totalValue = rows.reduce((sum, row) => sum + row.marketValue, 0);
+  const totalCost = rows.reduce((sum, row) => sum + row.shares * row.costBasis, 0);
+  const totalPnl = totalValue - totalCost;
+  const totalPnlPercent = totalCost > 0 ? (totalPnl / totalCost) * 100 : null;
+
+  return {
+    date: todayKeyJa(),
+    savedAt: new Date().toISOString(),
+    totalValue,
+    totalCost,
+    totalPnl,
+    totalPnlPercent,
+    marketHeadline: data.summary.marketHeadline,
+    rows
+  };
+}
+
 export function Dashboard() {
   const [tab, setTab] = useState<Tab>("home");
   const [data, setData] = useState<SummaryResponse | null>(null);
@@ -39,6 +157,43 @@ export function Dashboard() {
   const [error, setError] = useState<string | null>(null);
   const [activeTicker, setActiveTicker] = useState<string | null>(null);
   const [nowLabel, setNowLabel] = useState<string>("");
+  const [settingsLoaded, setSettingsLoaded] = useState(false);
+  const [customTickers, setCustomTickers] = useState<string[] | null>(null);
+  const [holdings, setHoldings] = useState<Holdings>({});
+  const [alertRules, setAlertRules] = useState<AlertRule[]>([]);
+  const [archives, setArchives] = useState<PortfolioSnapshot[]>([]);
+
+  useEffect(() => {
+    setCustomTickers(parseStringArray(window.localStorage.getItem(STORAGE_KEYS.tickers)));
+    setHoldings(parseHoldings(window.localStorage.getItem(STORAGE_KEYS.holdings)));
+    setAlertRules(parseAlerts(window.localStorage.getItem(STORAGE_KEYS.alerts)));
+    setArchives(parseArchives(window.localStorage.getItem(STORAGE_KEYS.archives)));
+    setSettingsLoaded(true);
+  }, []);
+
+  useEffect(() => {
+    if (!settingsLoaded) return;
+    if (customTickers) {
+      window.localStorage.setItem(STORAGE_KEYS.tickers, JSON.stringify(customTickers));
+    } else {
+      window.localStorage.removeItem(STORAGE_KEYS.tickers);
+    }
+  }, [customTickers, settingsLoaded]);
+
+  useEffect(() => {
+    if (!settingsLoaded) return;
+    window.localStorage.setItem(STORAGE_KEYS.holdings, JSON.stringify(holdings));
+  }, [holdings, settingsLoaded]);
+
+  useEffect(() => {
+    if (!settingsLoaded) return;
+    window.localStorage.setItem(STORAGE_KEYS.alerts, JSON.stringify(alertRules));
+  }, [alertRules, settingsLoaded]);
+
+  useEffect(() => {
+    if (!settingsLoaded) return;
+    window.localStorage.setItem(STORAGE_KEYS.archives, JSON.stringify(archives));
+  }, [archives, settingsLoaded]);
 
   useEffect(() => {
     const tick = () => setNowLabel(todayJaLabel());
@@ -48,22 +203,28 @@ export function Dashboard() {
   }, []);
 
   const load = useCallback(async () => {
+    if (!settingsLoaded) return;
     setLoading(true);
     setError(null);
     try {
-      const res = await fetch("/api/summary", { cache: "no-store" });
+      const qs = customTickers
+        ? `?tickers=${encodeURIComponent(customTickers.join(","))}`
+        : "";
+      const res = await fetch(`/api/summary${qs}`, { cache: "no-store" });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const json = (await res.json()) as SummaryResponse;
       setData(json);
-      if (json.quotes.length > 0 && !activeTicker) {
-        setActiveTicker(json.quotes[0].ticker);
-      }
+      setActiveTicker((current) =>
+        current && json.quotes.some((q) => q.ticker === current)
+          ? current
+          : json.quotes[0]?.ticker ?? null
+      );
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
     } finally {
       setLoading(false);
     }
-  }, [activeTicker]);
+  }, [customTickers, settingsLoaded]);
 
   const loadMacro = useCallback(async () => {
     setMacroLoading(true);
@@ -81,8 +242,8 @@ export function Dashboard() {
   }, []);
 
   useEffect(() => {
-    load();
-  }, [load]);
+    if (settingsLoaded) load();
+  }, [load, settingsLoaded]);
 
   useEffect(() => {
     if (tab === "macro" && !macroData && !macroLoading) {
@@ -96,6 +257,32 @@ export function Dashboard() {
   };
 
   const isLoading = tab === "home" ? loading : macroLoading;
+
+  const saveTodayArchive = () => {
+    if (!data) return;
+    const snapshot = buildSnapshot(data, holdings);
+    setArchives((current) =>
+      [snapshot, ...current.filter((item) => item.date !== snapshot.date)].sort((a, b) =>
+        b.date.localeCompare(a.date)
+      )
+    );
+  };
+
+  const exportData: ExportData = {
+    version: 1,
+    exportedAt: new Date().toISOString(),
+    watchlist: customTickers,
+    holdings,
+    alerts: alertRules,
+    archives
+  };
+
+  const importData = (next: ExportData) => {
+    setCustomTickers(next.watchlist ?? null);
+    setHoldings(next.holdings ?? {});
+    setAlertRules(next.alerts ?? []);
+    setArchives(next.archives ?? []);
+  };
 
   return (
     <div className="mx-auto flex max-w-6xl flex-col gap-4 px-3 py-4 sm:px-6 sm:py-6">
@@ -160,7 +347,7 @@ export function Dashboard() {
 
       {tab === "home" && (
         <>
-          {loading && !data && (
+          {(loading || !settingsLoaded) && !data && (
             <div className="card text-sm text-slate-500 dark:text-slate-400">
               データを取得しています…
             </div>
@@ -169,6 +356,37 @@ export function Dashboard() {
           {data && (
             <>
               <DailySummary summary={data.summary} />
+
+              <div className="grid gap-3 lg:grid-cols-[1fr_1.2fr]">
+                <WatchlistManager
+                  quotes={data.quotes}
+                  customTickers={customTickers}
+                  onChange={setCustomTickers}
+                />
+                <PortfolioPanel
+                  quotes={data.quotes}
+                  holdings={holdings}
+                  onChange={setHoldings}
+                />
+              </div>
+
+              <div className="grid gap-3 lg:grid-cols-[1fr_1fr]">
+                <DataToolsPanel data={exportData} onImport={importData} />
+                <ArchivePanel
+                  archives={archives}
+                  onSaveToday={saveTodayArchive}
+                  onDelete={(date) =>
+                    setArchives((current) => current.filter((item) => item.date !== date))
+                  }
+                />
+              </div>
+
+              <AlertsPanel
+                quotes={data.quotes}
+                newsByTicker={data.newsByTicker}
+                rules={alertRules}
+                onChange={setAlertRules}
+              />
 
               <section className="grid gap-3 sm:grid-cols-2">
                 {data.quotes.map((q) => (

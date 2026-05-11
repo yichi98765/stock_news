@@ -1,4 +1,6 @@
 export type Sentiment = "up" | "down" | "neutral";
+export type NewsImportance = "high" | "medium" | "low";
+export type ChartRange = "1d" | "5d" | "1mo" | "6mo";
 
 export interface TickerConfig {
   ticker: string;
@@ -36,6 +38,39 @@ export interface NewsItem {
   publishedAt: string;
   sentiment: Sentiment;
   sentimentReason: string;
+  importance: NewsImportance;
+  importanceScore: number;
+  importanceReason: string;
+}
+
+export interface ChartPoint {
+  time: string;
+  open: number;
+  high: number;
+  low: number;
+  close: number;
+  value: number;
+  volume: number | null;
+}
+
+export interface PortfolioSnapshot {
+  date: string;
+  savedAt: string;
+  totalValue: number;
+  totalCost: number;
+  totalPnl: number;
+  totalPnlPercent: number | null;
+  marketHeadline: string;
+  rows: {
+    ticker: string;
+    displayName: string;
+    shares: number;
+    costBasis: number;
+    price: number | null;
+    marketValue: number;
+    pnl: number;
+    pnlPercent: number | null;
+  }[];
 }
 
 export interface MarketIndex {
