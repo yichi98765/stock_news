@@ -4,13 +4,25 @@ import { getModelChain } from "@/lib/ai/geminiClient";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-export async function GET() {
+function canUseDebugEndpoint(request: Request): boolean {
+  if (process.env.NODE_ENV !== "production") return true;
+
+  const token = process.env.DEBUG_API_TOKEN;
+  if (!token) return false;
+
+  return request.headers.get("x-debug-token") === token;
+}
+
+export async function GET(request: Request) {
+  if (!canUseDebugEndpoint(request)) {
+    return NextResponse.json({ error: "not_found" }, { status: 404 });
+  }
+
   const apiKey = process.env.GEMINI_API_KEY;
   const chain = getModelChain();
 
   const checks = {
     hasGeminiKey: !!apiKey,
-    keyPreview: apiKey ? `${apiKey.slice(0, 6)}...${apiKey.slice(-4)}` : null,
     modelChain: chain
   };
 
