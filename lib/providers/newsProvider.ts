@@ -5,6 +5,12 @@ import { translateNewsBatch } from "../ai/newsTranslator";
 import { refineNewsImportance } from "../ai/newsImportance";
 
 const cache = createTtlCache<NewsItem[]>();
+const enhancedTickers = new Set<string>();
+
+interface FetchNewsOptions {
+  enhance?: boolean;
+  translate?: boolean;
+}
 
 const POSITIVE_KEYWORDS = [
   "beat", "beats", "record", "surge", "soar", "rally", "upgrade", "raises", "raise",
@@ -194,9 +200,19 @@ async function fetchFinnhubNews(ticker: string): Promise<NewsItem[]> {
   }
 }
 
-export async function fetchNews(cfg: TickerConfig): Promise<NewsItem[]> {
+export async function fetchNews(
+  cfg: TickerConfig,
+  options: FetchNewsOptions = {}
+): Promise<NewsItem[]> {
+  const enhance = options.enhance ?? true;
   const cached = cache.get(cfg.ticker);
-  if (cached) return cached;
+  if (cached) {
+    if (enhance && !enhancedTickers.has(cfg.ticker)) {
+      await refineNewsImportance(cached);
+      enhancedTickers.add(cfg.ticker);
+    }
+    return cached;
+  }
 
   const [yahoo, finnhub] = await Promise.all([
     fetchYahooNews(cfg.ticker),
@@ -217,7 +233,10 @@ export async function fetchNews(cfg: TickerConfig): Promise<NewsItem[]> {
   );
 
   const top = merged.slice(0, 12);
-  await refineNewsImportance(top);
+  if (enhance) {
+    await refineNewsImportance(top);
+    enhancedTickers.add(cfg.ticker);
+  }
   cache.set(cfg.ticker, top, CACHE_TTL_MS.news);
   return top;
 }
@@ -243,12 +262,17 @@ async function ensureJapaneseSummaries(
 }
 
 export async function fetchAllNews(
-  cfgs: TickerConfig[]
+  cfgs: TickerConfig[],
+  options: FetchNewsOptions = {}
 ): Promise<Record<string, NewsItem[]>> {
+  const enhance = options.enhance ?? true;
+  const translate = options.translate ?? true;
   const entries = await Promise.all(
-    cfgs.map(async (c) => [c.ticker, await fetchNews(c)] as const)
+    cfgs.map(async (c) => [c.ticker, await fetchNews(c, { enhance })] as const)
   );
   const byTicker = Object.fromEntries(entries);
-  await ensureJapaneseSummaries(byTicker);
+  if (translate) {
+    await ensureJapaneseSummaries(byTicker);
+  }
   return byTicker;
 }

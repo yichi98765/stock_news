@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import type {
   DailySummary as DailySummaryType,
   MarketOverview as MarketOverviewType,
@@ -27,6 +27,7 @@ interface SummaryResponse {
   quotes: StockQuote[];
   newsByTicker: Record<string, NewsItem[]>;
   market: MarketOverviewType;
+  fast?: boolean;
 }
 
 interface MacroResponse {
@@ -162,6 +163,7 @@ export function Dashboard() {
   const [holdings, setHoldings] = useState<Holdings>({});
   const [alertRules, setAlertRules] = useState<AlertRule[]>([]);
   const [archives, setArchives] = useState<PortfolioSnapshot[]>([]);
+  const loadSeq = useRef(0);
 
   useEffect(() => {
     setCustomTickers(parseStringArray(window.localStorage.getItem(STORAGE_KEYS.tickers)));
@@ -204,25 +206,48 @@ export function Dashboard() {
 
   const load = useCallback(async () => {
     if (!settingsLoaded) return;
+    const seq = ++loadSeq.current;
     setLoading(true);
     setError(null);
-    try {
-      const qs = customTickers
-        ? `?tickers=${encodeURIComponent(customTickers.join(","))}`
-        : "";
-      const res = await fetch(`/api/summary${qs}`, { cache: "no-store" });
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      const json = (await res.json()) as SummaryResponse;
+
+    const summaryUrl = (fast: boolean) => {
+      const params = new URLSearchParams();
+      if (customTickers) params.set("tickers", customTickers.join(","));
+      if (fast) params.set("fast", "1");
+      const qs = params.toString();
+      return `/api/summary${qs ? `?${qs}` : ""}`;
+    };
+
+    const applySummary = (json: SummaryResponse) => {
       setData(json);
       setActiveTicker((current) =>
         current && json.quotes.some((q) => q.ticker === current)
           ? current
           : json.quotes[0]?.ticker ?? null
       );
-    } catch (e) {
-      setError(e instanceof Error ? e.message : String(e));
-    } finally {
+    };
+
+    try {
+      const fastRes = await fetch(summaryUrl(true), { cache: "no-store" });
+      if (!fastRes.ok) throw new Error(`HTTP ${fastRes.status}`);
+      const fastJson = (await fastRes.json()) as SummaryResponse;
+      if (seq !== loadSeq.current) return;
+      applySummary(fastJson);
       setLoading(false);
+
+      const fullRes = await fetch(summaryUrl(false), { cache: "no-store" });
+      if (!fullRes.ok) throw new Error(`HTTP ${fullRes.status}`);
+      const fullJson = (await fullRes.json()) as SummaryResponse;
+      if (seq !== loadSeq.current) return;
+      applySummary(fullJson);
+    } catch (e) {
+      if (seq === loadSeq.current) {
+        setError(e instanceof Error ? e.message : String(e));
+      }
+    } finally {
+      if (seq === loadSeq.current) {
+        setLoading(false);
+      }
     }
   }, [customTickers, settingsLoaded]);
 
@@ -310,7 +335,7 @@ export function Dashboard() {
             disabled={isLoading}
             className="rounded-full bg-slate-900 px-3 py-1.5 text-sm font-medium text-white hover:bg-slate-700 disabled:opacity-50 dark:bg-slate-100 dark:text-slate-900 dark:hover:bg-white"
           >
-            {isLoading ? "更新中…" : "更新"}
+            {isLoading && data ? "要約更新中…" : isLoading ? "更新中…" : "更新"}
           </button>
           <ThemeToggle />
         </div>
