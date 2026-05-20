@@ -27,7 +27,7 @@ export async function GET(request: Request) {
   ]);
 
   const summary = fast
-    ? buildRuleBasedSummary(quotes, newsByTicker, market)
+    ? buildRuleBasedSummary(quotes, newsByTicker, market, "fast-loading")
     : await summarize({ quotes, newsByTicker, market });
 
   const payload = { summary, quotes, newsByTicker, market, fast };

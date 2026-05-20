@@ -3,6 +3,7 @@ import type {
   MarketOverview,
   NewsItem,
   PerTickerSummary,
+  SummaryFallbackReason,
   StockQuote
 } from "../types";
 
@@ -82,11 +83,13 @@ export function buildMarketHeadline(market: MarketOverview): string {
 export function buildRuleBasedSummary(
   quotes: StockQuote[],
   newsByTicker: Record<string, NewsItem[]>,
-  market: MarketOverview
+  market: MarketOverview,
+  fallbackReason?: SummaryFallbackReason
 ): DailySummary {
   return {
     generatedAt: new Date().toISOString(),
     generatedBy: "rule-based",
+    fallbackReason,
     marketHeadline: buildMarketHeadline(market),
     perTicker: quotes.map((q) =>
       buildPerTickerSummary(q, newsByTicker[q.ticker] ?? [], market)

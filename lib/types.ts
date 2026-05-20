@@ -103,9 +103,16 @@ export interface PerTickerSummary {
   confidence: "low" | "medium" | "high";
 }
 
+export type SummaryFallbackReason =
+  | "fast-loading"
+  | "no-ai-key"
+  | "ai-unavailable"
+  | "ai-invalid-json";
+
 export interface DailySummary {
   generatedAt: string;
   generatedBy: "rule-based" | "anthropic" | "openai" | "gemini";
+  fallbackReason?: SummaryFallbackReason;
   marketHeadline: string;
   perTicker: PerTickerSummary[];
 }

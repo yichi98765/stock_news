@@ -219,30 +219,46 @@ function mapModelToSummary(
 
 export async function summarize(input: SummaryInput): Promise<DailySummary> {
   const prompt = buildUserPrompt(input);
+  let attemptedAi = false;
+  let invalidJson = false;
 
   if (process.env.GEMINI_API_KEY) {
+    attemptedAi = true;
     const text = await callGemini(prompt);
     if (text) {
       const parsed = parseModelJson(text);
       if (parsed) return mapModelToSummary(parsed, input, "gemini");
+      invalidJson = true;
+      console.warn("[summarizer] Gemini returned text that could not be parsed as JSON");
     }
   }
 
   if (process.env.ANTHROPIC_API_KEY) {
+    attemptedAi = true;
     const text = await callAnthropic(prompt);
     if (text) {
       const parsed = parseModelJson(text);
       if (parsed) return mapModelToSummary(parsed, input, "anthropic");
+      invalidJson = true;
+      console.warn("[summarizer] Anthropic returned text that could not be parsed as JSON");
     }
   }
 
   if (process.env.OPENAI_API_KEY) {
+    attemptedAi = true;
     const text = await callOpenAI(prompt);
     if (text) {
       const parsed = parseModelJson(text);
       if (parsed) return mapModelToSummary(parsed, input, "openai");
+      invalidJson = true;
+      console.warn("[summarizer] OpenAI returned text that could not be parsed as JSON");
     }
   }
 
-  return buildRuleBasedSummary(input.quotes, input.newsByTicker, input.market);
+  return buildRuleBasedSummary(
+    input.quotes,
+    input.newsByTicker,
+    input.market,
+    attemptedAi ? (invalidJson ? "ai-invalid-json" : "ai-unavailable") : "no-ai-key"
+  );
 }

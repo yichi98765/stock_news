@@ -12,7 +12,7 @@
 - 市場全体の状況（S&P500 / NASDAQ / Dow / Russell 2000 と主要セクターETF）
 - セクターローテーション・市場テーマの自動推定（金利・AI・EV など）
 - iPhone と PC の両対応レスポンシブ + ダークモード切替
-- AI 要約は Claude / OpenAI を任意で差し替え可能。**APIキー無しでもルールベースで動作**。
+- AI 要約は Gemini / Claude / OpenAI を任意で差し替え可能。**APIキー無しでもルールベースで動作**。
 - 保有数量・取得単価の端末保存、評価損益・銘柄比率表示、JSON入出力
 - 1日/5日/1か月/6か月チャート、出来高、前日終値ライン、ローソク足、プレ/アフター市場切替
 - 価格・前日比・ニュース語句アラート、ブラウザ通知、Slack/Pushover/LINE/Email/Webhook 送信
@@ -24,7 +24,7 @@
 - `app/api/*` で最小限のサーバ層 (株価・ニュース・市場・要約)
 - 株価・指数・セクターETF: **`yahoo-finance2`** (npm) — APIキー不要
 - ニュース: Yahoo Finance のニュース API + Finnhub (任意)
-- AI: Anthropic Claude → OpenAI → ルールベース の優先順位でフォールバック
+- AI: Gemini → Anthropic Claude → OpenAI → ルールベース の優先順位でフォールバック
 - インメモリ TTL キャッシュ（株価60秒、ニュース5分、市場2分、要約5分）
 
 ## 必要な API 候補（全て無料枠あり / 設定不要でも動く）
